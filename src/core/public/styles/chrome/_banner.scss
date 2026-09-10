@@ -1,0 +1,13 @@
+.header__topBanner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: var(--kbnHeaderBannerHeight);
+  width: 100%;
+  z-index: $euiZHeader;
+}
+
+.header__topBannerContainer {
+  height: 100%;
+  width: 100%;
+}

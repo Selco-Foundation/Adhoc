@@ -1,0 +1,26 @@
+{
+  "id": "fullExport",
+  "version": "1.0.0",
+  "kibanaVersion": "kibana",
+  "owner": {
+    "name": "Tanmay",
+    "githubTeam": ""
+  },
+  "description": "",
+  "server": true,
+  "ui": true,
+  "requiredPlugins": [
+    "data",
+    "dashboard",
+    "embeddable"
+  ],
+  "optionalPlugins": [],
+  "requiredBundles": [
+    "savedObjects",
+    "savedObjectsFinder",
+    "kibanaReact",
+    "kibanaUtils",
+    "uiActions",
+    "unifiedSearch"
+  ]
+}

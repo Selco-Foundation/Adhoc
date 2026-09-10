@@ -1,0 +1,7 @@
+{
+  "prefix": "fullExport",
+  "paths": {
+    "fullExport": "."
+  },
+  "translations": ["translations/ja-JP.json"]
+}

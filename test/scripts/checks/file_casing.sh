@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+source src/dev/ci_setup/setup_env.sh
+
+node scripts/check_file_casing --quiet
