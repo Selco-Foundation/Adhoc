@@ -1,7 +1,13 @@
 import { schema } from '@kbn/config-schema';
+import dateMath from '@kbn/datemath';
+import { buildEsQuery } from '@kbn/es-query';
 import { IRouter } from '../../../../src/core/server';
 
 const SLA_INDEX = 'computed-sla-im-services*';
+
+// The dashboard time picker filters on the data view's time field. `Data.@timestamp`
+// is the only `date`-mapped field on this index, so it is what the range applies to.
+const TIME_FIELD = 'Data.@timestamp';
 
 const CSV_COLUMNS = [
   'facilityId',
@@ -42,6 +48,49 @@ function toCsv(rows: CsvRow[]): string {
 }
 
 const PAGE_SIZE = 1000;
+
+// Translates the dashboard's own state - filter pills (which is what Controls emit),
+// the KQL/Lucene bar and the time picker - into a single Elasticsearch query, so the
+// export matches exactly what the dashboard is displaying.
+function buildDashboardQuery({
+  filters,
+  query,
+  timeRange,
+}: {
+  filters?: any[];
+  query?: any;
+  timeRange?: { from: string; to: string };
+}): Record<string, any> {
+  const esQuery = buildEsQuery(undefined, query ? [query] : [], filters ?? []);
+
+  if (!timeRange) {
+    return esQuery;
+  }
+
+  const from = dateMath.parse(timeRange.from);
+  const to = dateMath.parse(timeRange.to, { roundUp: true });
+
+  if (!from && !to) {
+    return esQuery;
+  }
+
+  return {
+    bool: {
+      must: [esQuery],
+      filter: [
+        {
+          range: {
+            [TIME_FIELD]: {
+              ...(from ? { gte: from.toISOString() } : {}),
+              ...(to ? { lte: to.toISOString() } : {}),
+              format: 'strict_date_optional_time',
+            },
+          },
+        },
+      ],
+    },
+  };
+}
 
 function isIndexNotFoundError(error: any): boolean {
   return error?.meta?.body?.error?.type === 'index_not_found_exception';
@@ -120,90 +169,27 @@ export function defineRoutes(router: IRouter) {
     }
   );
 
-  router.get(
-    {
-      path: '/api/full_export/sla-filters',
-      validate: {
-        query: schema.object({
-          state: schema.maybe(schema.string()),
-        }),
-      },
-    },
-    async (context, request, response) => {
-      const esClient = (await context.core).elasticsearch.client.asCurrentUser;
-      const { state } = request.query;
-
-      const districtQuery = state
-        ? { bool: { filter: [{ term: { 'Data.state.keyword': state } }] } }
-        : { match_all: {} };
-
-      try {
-        const [stateAggResult, districtAggResult] = await Promise.all([
-          esClient.search<unknown, { states: { buckets: Array<{ key: string }> } }>({
-            index: SLA_INDEX,
-            size: 0,
-            ignore_unavailable: true,
-            aggs: { states: { terms: { field: 'Data.state.keyword', size: 1000 } } },
-          }),
-          esClient.search<unknown, { districts: { buckets: Array<{ key: string }> } }>({
-            index: SLA_INDEX,
-            size: 0,
-            ignore_unavailable: true,
-            query: districtQuery,
-            aggs: { districts: { terms: { field: 'Data.district.keyword', size: 1000 } } },
-          }),
-        ]);
-
-        const states =
-          stateAggResult.aggregations?.states.buckets.map((bucket) => bucket.key) ?? [];
-        const districts =
-          districtAggResult.aggregations?.districts.buckets.map((bucket) => bucket.key) ?? [];
-
-        return response.ok({ body: { states, districts } });
-      } catch (error) {
-        if (isIndexNotFoundError(error)) {
-          return response.ok({ body: { states: [], districts: [] } });
-        }
-        throw error;
-      }
-    }
-  );
-
-  router.get(
+  router.post(
     {
       path: '/api/full_export/sla-report',
       validate: {
-        query: schema.object({
-          district: schema.maybe(schema.string()),
-          block: schema.maybe(schema.string()),
-          priority: schema.maybe(schema.string()),
-          state: schema.maybe(schema.string()),
-          fromDate: schema.maybe(schema.number()),
-          toDate: schema.maybe(schema.number()),
+        // The dashboard's filter/query objects are Kibana-owned shapes that carry their
+        // own DSL, so they are accepted as-is and normalised by buildEsQuery.
+        body: schema.object({
+          filters: schema.maybe(schema.arrayOf(schema.any())),
+          query: schema.maybe(schema.any()),
+          timeRange: schema.maybe(
+            schema.object({
+              from: schema.string(),
+              to: schema.string(),
+            })
+          ),
         }),
       },
     },
     async (context, request, response) => {
       const esClient = (await context.core).elasticsearch.client.asCurrentUser;
-      const { district, block, priority, state, fromDate, toDate } = request.query;
-
-      const filters: Record<string, any>[] = [];
-      if (district) filters.push({ term: { 'Data.district.keyword': district } });
-      if (block) filters.push({ term: { 'Data.block.keyword': block } });
-      if (priority) filters.push({ term: { 'Data.priority.keyword': priority } });
-      if (state) filters.push({ term: { 'Data.state.keyword': state } });
-      if (fromDate || toDate) {
-        filters.push({
-          range: {
-            'Data.filedDate': {
-              ...(fromDate ? { gte: fromDate } : {}),
-              ...(toDate ? { lte: toDate } : {}),
-            },
-          },
-        });
-      }
-
-      const query = filters.length ? { bool: { filter: filters } } : { match_all: {} };
+      const query = buildDashboardQuery(request.body);
 
       let hits: Array<Record<string, any>>;
       try {
