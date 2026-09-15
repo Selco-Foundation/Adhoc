@@ -8,14 +8,15 @@ export class SlaDownloadEmbeddableFactory implements EmbeddableFactoryDefinition
 
   constructor(private readonly basePath: IBasePath) {}
 
+  // The panel has no configurable settings, so there is no edit flow to offer.
   public async isEditable() {
-    return true;
+    return false;
   }
 
   public canCreateNew() {
-  return true;
+    return true;
   }
-  
+
   public getDisplayName() {
     return 'SLA CSV Download';
   }
