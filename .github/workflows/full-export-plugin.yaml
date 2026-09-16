@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    paths:
+      - plugins/full_export/*
   workflow_dispatch:
 
 env:
