@@ -8,9 +8,11 @@ export class SlaDownloadEmbeddableFactory implements EmbeddableFactoryDefinition
 
   constructor(private readonly basePath: IBasePath) {}
 
-  // The panel has no configurable settings, so there is no edit flow to offer.
+  // Must stay true: the dashboard's "Add panel" menu filters on the resolved value of
+  // isEditable() as well as canCreateNew(), so returning false hides the panel type
+  // from the menu entirely rather than just suppressing an edit action.
   public async isEditable() {
-    return false;
+    return true;
   }
 
   public canCreateNew() {
