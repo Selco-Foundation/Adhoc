@@ -22,19 +22,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 18.18.2
           cache: yarn
           cache-dependency-path: kibana-plugin/yarn.lock
-
-      - name: Cache Kibana dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            node_modules
-            ~/.cache/yarn
-          key: kibana-${{ hashFiles('yarn.lock') }}
-          restore-keys: |
-            kibana-
 
       - name: Bootstrap Kibana
         run: yarn kbn bootstrap
